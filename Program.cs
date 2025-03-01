@@ -6,5 +6,10 @@ builder.Services.Configure<SyncConfiguration>(builder.Configuration.GetSection("
 builder.Services.AddTransient<FileSyncService>();
 builder.Services.AddHostedService<Worker>();
 
+builder.Services.AddWindowsService(options =>
+{
+    options.ServiceName = ".NET Joke Service";
+});
+
 var host = builder.Build();
 host.Run();
