@@ -10,9 +10,10 @@ namespace LiveSync
     /// Initializes a new instance of the <see cref="FileSyncService"/> class.
     /// </remarks>
     /// <param name="logger">The logger instance.</param>
-    public class FileSyncService(ILogger<FileSyncService> logger)
+    public class FileSyncService(ILogger<FileSyncService> logger, IFtpClientFactory ftpClientFactory)
     {
         private readonly ILogger<FileSyncService> _logger = logger;
+        private readonly IFtpClientFactory ftpClientFactory = ftpClientFactory;
 
         /// <summary>
         /// Synchronizes files between the specified locations based on hash comparison.
@@ -97,7 +98,7 @@ namespace LiveSync
         /// </summary>
         /// <param name="location">The location.</param>
         /// <returns>The list of files.</returns>
-        private static async Task<IEnumerable<string>> GetFilesAsync(Location location, CancellationToken token)
+        private async Task<IEnumerable<string>> GetFilesAsync(Location location, CancellationToken token)
         {
             try
             {
@@ -122,7 +123,7 @@ namespace LiveSync
         /// <param name="location">The location.</param>
         /// <param name="filePath">The file path.</param>
         /// <returns>True if the file exists, otherwise false.</returns>
-        private static async Task<bool> FileExistsAsync(Location location, string filePath, CancellationToken token)
+        private async Task<bool> FileExistsAsync(Location location, string filePath, CancellationToken token)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(10));
@@ -142,7 +143,7 @@ namespace LiveSync
         /// <param name="location">The location.</param>
         /// <param name="filePath">The path of the file.</param>
         /// <returns>The hash of the file.</returns>
-        private static async Task<string> GetFileHashAsync(Location location, string filePath, CancellationToken token)
+        private async Task<string> GetFileHashAsync(Location location, string filePath, CancellationToken token)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(10));
@@ -166,7 +167,7 @@ namespace LiveSync
         /// <param name="location">The location.</param>
         /// <param name="filePath">The path of the file.</param>
         /// <returns>The last modified time of the file.</returns>
-        private static async Task<DateTime> GetFileLastModifiedAsync(
+        private async Task<DateTime> GetFileLastModifiedAsync(
             Location location,
             string filePath,
             CancellationToken token)
@@ -226,12 +227,11 @@ namespace LiveSync
         /// <param name="location">The FTP location.</param>
         /// <param name="sourceFilePath">The source file path.</param>
         /// <param name="targetFilePath">The target file path.</param>
-        private static async Task DownloadFtpFileAsync(Location location, string sourceFilePath, string targetFilePath, CancellationToken token)
+        private async Task DownloadFtpFileAsync(Location location, string sourceFilePath, string targetFilePath, CancellationToken token)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(60));
-            using var client = CreateFtpClient(location);
-            await client.Connect(cts.Token);
+            var client = await this.ftpClientFactory.CreateFtpClientAsync(location, token);
             await client.DownloadFile(targetFilePath, sourceFilePath, token: cts.Token);
         }
 
@@ -240,15 +240,14 @@ namespace LiveSync
         /// </summary>
         /// <param name="location">The FTP location.</param>
         /// <returns>The list of files.</returns>
-        private static async Task<IEnumerable<string>> GetFtpFilesAsync(Location location, CancellationToken token)
+        private async Task<IEnumerable<string>> GetFtpFilesAsync(Location location, CancellationToken token)
         {
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
                 cts.CancelAfter(TimeSpan.FromSeconds(10));
 
-                using var client = CreateFtpClient(location);
-                await client.Connect(cts.Token);
+                var client = await this.ftpClientFactory.CreateFtpClientAsync(location, token);
                 var items = await client.GetListing(location.Path, cts.Token);
                 return [.. items.Where(i => i.Type == FtpObjectType.File).Select(i => i.FullName)];
             }
@@ -264,15 +263,14 @@ namespace LiveSync
         /// <param name="location">The FTP location.</param>
         /// <param name="filePath">The file path.</param>
         /// <returns>True if the file exists, otherwise false.</returns>
-        private static async Task<bool> FtpFileExistsAsync(Location location, string filePath, CancellationToken token)
+        private async Task<bool> FtpFileExistsAsync(Location location, string filePath, CancellationToken token)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(10));
 
             try
             {
-                using var client = CreateFtpClient(location);
-                await client.Connect(cts.Token);
+                var client = await this.ftpClientFactory.CreateFtpClientAsync(location, token);
                 return await client.FileExists(filePath, cts.Token);
             }
             catch (Exception) 
@@ -287,13 +285,12 @@ namespace LiveSync
         /// <param name="location">The FTP location.</param>
         /// <param name="filePath">The file path.</param>
         /// <returns>The hash of the file.</returns>
-        private static async Task<string> GetFtpFileHashAsync(Location location, string filePath, CancellationToken token)
+        private async Task<string> GetFtpFileHashAsync(Location location, string filePath, CancellationToken token)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(10));
 
-            using var client = CreateFtpClient(location);
-            await client.Connect(cts.Token);
+            var client = await this.ftpClientFactory.CreateFtpClientAsync(location, token);
             using var stream = await client.OpenRead(filePath, token: cts.Token);
             using var sha256 = SHA256.Create();
             var hash = await sha256.ComputeHashAsync(stream, cts.Token);
@@ -306,13 +303,12 @@ namespace LiveSync
         /// <param name="location">The FTP location.</param>
         /// <param name="filePath">The file path.</param>
         /// <returns>The last modified time of the file.</returns>
-        private static async Task<DateTime> GetFtpFileLastModifiedAsync(Location location, string filePath, CancellationToken token)
+        private async Task<DateTime> GetFtpFileLastModifiedAsync(Location location, string filePath, CancellationToken token)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(10));
 
-            using var client = CreateFtpClient(location);
-            await client.Connect(token);
+            var client = await this.ftpClientFactory.CreateFtpClientAsync(location, token);
 
             var filename = Path.GetFileName(filePath);
             var listing = await client.GetListing(location.Path, FtpListOption.Modify, token);
@@ -328,30 +324,13 @@ namespace LiveSync
         /// <param name="location">The FTP location.</param>
         /// <param name="sourceFilePath">The source file path.</param>
         /// <param name="targetFilePath">The target file path.</param>
-        private static async Task UploadFtpFileAsync(Location location, string sourceFilePath, string targetFilePath, CancellationToken token)
+        private async Task UploadFtpFileAsync(Location location, string sourceFilePath, string targetFilePath, CancellationToken token)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(60));
 
-            using var client = CreateFtpClient(location);
-            await client.Connect(cts.Token);
+            var client = await this.ftpClientFactory.CreateFtpClientAsync(location, token);
             await client.UploadFile(sourceFilePath, targetFilePath, FtpRemoteExists.Overwrite, token: cts.Token);        
-        }
-
-        private static AsyncFtpClient CreateFtpClient(Location location)
-        {
-            return new AsyncFtpClient(location.FtpHost,
-                location.Username,
-                location.Password,
-                location.FtpPort,
-                new FtpConfig()
-                {
-                    ServerTimeZone = TimeZoneInfo.CreateCustomTimeZone(
-                        "utc+11",
-                        TimeSpan.FromHours(location.FtpHostTimezone),
-                        null,
-                        null)
-                });
         }
     }
 }
