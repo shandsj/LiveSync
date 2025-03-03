@@ -15,26 +15,27 @@ The configuration for LiveSync is stored in the `appsettings.json` file. Below i
         }
     },
     "SyncConfiguration": {
+        "CacheDirectory": "C:\\Users\\example\\AppData\\Local\\Sync\\Cache",
         "SyncSettings": [
             {
-                "Name": "Documents Sync",
-                "FileExtensions": [".docx", ".pdf"],
+                "Name": "Example Sync",
+                "FileExtensions": [".txt", ".jpg"],
                 "Locations": [
                     {
-                        "Path": "C:\\Work\\Shared\\Documents",
+                        "Path": "C:\\Example\\Local\\Path",
                         "Type": "Local"
                     },
                     {
-                        "Path": "\\\\fileserver\\shared\\documents",
+                        "Path": "\\\\example\\network\\share",
                         "Type": "FileShare",
-                        "Username": "user",
-                        "Password": "password"
+                        "Username": "exampleUser",
+                        "Password": "examplePassword"
                     },
                     {
-                        "Path": "/remote/documents",
+                        "Path": "/example/ftp/path",
                         "Type": "Ftp",
-                        "Username": "ftpuser",
-                        "Password": "ftppassword",
+                        "Username": "ftpUser",
+                        "Password": "ftpPassword",
                         "FtpHost": "ftp.example.com",
                         "FtpPort": 21,
                         "FtpHostTimezone": 0
@@ -54,6 +55,7 @@ The `Logging` section configures the logging level for the application. You can 
 
 The `SyncConfiguration` section contains the settings for file synchronization.
 
+- **CacheDirectory**: The directory path where files will be cached during synchronization.
 - **SyncSettings**: A list of synchronization settings.
   - **Name**: The name of the synchronization setting.
   - **FileExtensions**: An array of file extensions to synchronize.
