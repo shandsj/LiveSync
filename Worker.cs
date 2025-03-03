@@ -10,19 +10,24 @@ namespace LiveSync
     /// <summary>
     /// Represents a background worker that performs synchronization tasks.
     /// </summary>
-    /// <remarks>
-    /// Initializes a new instance of the <see cref="Worker"/> class.
-    /// </remarks>
-    /// <param name="logger">The logger instance.</param>
-    /// <param name="syncConfiguration">The synchronization configuration.</param>
-    public class Worker(
-        ILogger<Worker> logger,
-        IOptions<SyncConfiguration> syncConfiguration,
-        FileSyncService fileSyncService) : BackgroundService
+    public class Worker : BackgroundService
     {
-        private readonly ILogger<Worker> _logger = logger;
-        private readonly FileSyncService fileSyncService = fileSyncService;
-        private readonly SyncConfiguration _syncConfiguration = syncConfiguration.Value;
+        private readonly ILogger<Worker> _logger;
+        private readonly FileSyncService _fileSyncService;
+        private readonly SyncConfiguration _syncConfiguration;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Worker"/> class.
+        /// </summary>
+        /// <param name="logger">The logger instance.</param>
+        /// <param name="syncConfiguration">The synchronization configuration.</param>
+        /// <param name="fileSyncService">The file synchronization service.</param>
+        public Worker(ILogger<Worker> logger, IOptions<SyncConfiguration> syncConfiguration, FileSyncService fileSyncService)
+        {
+            _logger = logger;
+            _syncConfiguration = syncConfiguration.Value;
+            _fileSyncService = fileSyncService;
+        }
 
         /// <summary>
         /// Executes the background synchronization task.
@@ -33,24 +38,19 @@ namespace LiveSync
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-
                 try
                 {
                     _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
 
                     foreach (var syncSetting in _syncConfiguration.SyncSettings)
                     {
-                        var name = syncSetting.Name;
-                        var fileExtensions = syncSetting.FileExtensions;
-                        var locations = syncSetting.Locations;
-                        
                         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-                        await fileSyncService.SyncFilesAsync(locations, fileExtensions, cts.Token);
+                        await _fileSyncService.SyncFilesAsync(syncSetting, cts.Token);
                     }
                 }
                 catch (Exception ex)
                 {
-                    this._logger.LogCritical(ex, "An unhandled exception occurred.");
+                    _logger.LogCritical(ex, "An unhandled exception occurred.");
                 }
 
                 await Task.Delay(60000, stoppingToken);
