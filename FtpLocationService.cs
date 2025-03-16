@@ -14,6 +14,7 @@ namespace LiveSync
         private readonly IEnumerable<string> _fileExtensions;
         private readonly ILogger<FtpLocationService> _logger;
         private readonly AsyncFtpClient _ftpClient;
+        private readonly int _maxBackups;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="FtpLocationService"/> class.
@@ -22,7 +23,13 @@ namespace LiveSync
         /// <param name="location">The location to synchronize.</param>
         /// <param name="fileExtensions">The file extensions to filter.</param>
         /// <param name="logger">The logger instance.</param>
-        public FtpLocationService(string cacheDirectory, Location location, IEnumerable<string> fileExtensions, ILogger<FtpLocationService> logger)
+        /// <param name="maxBackups">The maximum number of backups to keep per file.</param>
+        public FtpLocationService(
+            string cacheDirectory,
+            Location location,
+            IEnumerable<string> fileExtensions,
+            ILogger<FtpLocationService> logger,
+            int maxBackups)
         {
             _cacheDirectory = cacheDirectory;
             _location = location;
@@ -32,15 +39,16 @@ namespace LiveSync
                 location.FtpHost,
                 location.Username,
                 location.Password,
-                location.FtpPort,
-                new FtpConfig()
-                {
-                    ServerTimeZone = TimeZoneInfo.CreateCustomTimeZone(
-                        location.FtpHostTimezone.ToString(),
-                        TimeSpan.FromHours(location.FtpHostTimezone),
-                        null,
-                        null),
-                });
+                location.FtpPort);
+                // new FtpConfig()
+                // {
+                //     ServerTimeZone = TimeZoneInfo.CreateCustomTimeZone(
+                //         location.FtpHostTimezone.ToString(),
+                //         TimeSpan.FromHours(location.FtpHostTimezone),
+                //         null,
+                //         null),
+                // });
+            _maxBackups = maxBackups;
         }
 
         /// <inheritdoc />
@@ -60,17 +68,19 @@ namespace LiveSync
 
                     var sourceFileTimestamp = (await _ftpClient.GetListing(_location.Path, FtpListOption.Modify, token))
                         .Where(item => item.Type == FtpObjectType.File && item.Name == file)
-                        .Select(item => item.Modified)
+                        .Select(item => item.RawModified)
                         .FirstOrDefault();
                         
-                    var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTime(destinationFilePath) : DateTime.MinValue;
+                    var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTimeUtc(destinationFilePath) : DateTime.MinValue;
 
                     if (sourceFileTimestamp > destinationFileTimestamp)
                     {
                         if (!File.Exists(destinationFilePath) || !await FilesAreEqualAsync(sourceFilePath, destinationFilePath, token))
                         {
+                            BackupFile(destinationFilePath);
                             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
                             await _ftpClient.DownloadFile(destinationFilePath, sourceFilePath, FtpLocalExists.Overwrite, token: token);
+                            File.SetLastWriteTimeUtc(destinationFilePath, sourceFileTimestamp);
                             _logger.LogInformation("Downloaded file from {Source} to {Destination}", sourceFilePath, destinationFilePath);
                         }
                     }
@@ -105,18 +115,19 @@ namespace LiveSync
                     var sourceFilePath = Path.Combine(_cacheDirectory, file);
                     var destinationFilePath = $"{_location.Path}/{file}";
 
-                    var sourceFileTimestamp = File.GetLastWriteTime(sourceFilePath);
+                    var sourceFileTimestamp = File.GetLastWriteTimeUtc(sourceFilePath);
                     var destinationFileTimestamp = (await _ftpClient.GetListing(_location.Path, FtpListOption.Modify, token))
                         .Where(item => item.Type == FtpObjectType.File && item.Name == file)
-                        .Select(item => item.Modified)
+                        .Select(item => item.RawModified)
                         .FirstOrDefault();                        
 
                     if (sourceFileTimestamp > destinationFileTimestamp)
                     {
                         if (!await FtpFileExistsAsync(destinationFilePath, token) || !await FilesAreEqualAsync(destinationFilePath, sourceFilePath, token))
                         {
-                            Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
+                            //BackupFile(destinationFilePath);
                             await _ftpClient.UploadFile(sourceFilePath, destinationFilePath, FtpRemoteExists.Overwrite, token: token);
+                            await _ftpClient.SetModifiedTime(destinationFilePath, sourceFileTimestamp, token);
                             _logger.LogInformation("Uploaded file from {Source} to {Destination}", sourceFilePath, destinationFilePath);
                         }
                     }
@@ -133,6 +144,32 @@ namespace LiveSync
             finally
             {
                 await _ftpClient.Disconnect(token);
+            }
+        }
+
+        /// <summary>
+        /// Creates a backup of the specified file.
+        /// </summary>
+        /// <param name="filePath">The path of the file to back up.</param>
+        private void BackupFile(string filePath)
+        {
+            if (File.Exists(filePath))
+            {
+                var backupFilePath = $"{filePath}.{DateTime.UtcNow:yyyyMMddHHmmss}.bak";
+                File.Copy(filePath, backupFilePath);
+                _logger.LogInformation("Created backup of file {FilePath} at {BackupFilePath}", filePath, backupFilePath);
+
+                // Delete old backups if they exceed the maximum number of backups
+                var backupFiles = Directory.GetFiles(Path.GetDirectoryName(filePath), $"{Path.GetFileName(filePath)}.*.bak")
+                    .OrderByDescending(f => f)
+                    .Skip(_maxBackups)
+                    .ToList();
+
+                foreach (var backup in backupFiles)
+                {
+                    File.Delete(backup);
+                    _logger.LogInformation("Deleted old backup file {BackupFilePath}", backup);
+                }
             }
         }
 
@@ -186,8 +223,8 @@ namespace LiveSync
             try
             {
                 return Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories)
-                                .Where(file => _fileExtensions.Contains(Path.GetExtension(file)))
-                                .Select(file => Path.GetRelativePath(directory, file));
+                    .Where(file => _fileExtensions.Contains(Path.GetExtension(file)))
+                    .Select(file => Path.GetRelativePath(directory, file));
             }
             catch (Exception ex)
             {

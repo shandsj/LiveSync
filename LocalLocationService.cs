@@ -11,6 +11,7 @@ namespace LiveSync
         private readonly Location _location;
         private readonly IEnumerable<string> _fileExtensions;
         private readonly ILogger<LocalLocationService> _logger;
+        private readonly int _maxBackups;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LocalLocationService"/> class.
@@ -19,12 +20,14 @@ namespace LiveSync
         /// <param name="location">The location to synchronize.</param>
         /// <param name="fileExtensions">The file extensions to filter.</param>
         /// <param name="logger">The logger instance.</param>
-        public LocalLocationService(string cacheDirectory, Location location, IEnumerable<string> fileExtensions, ILogger<LocalLocationService> logger)
+        /// <param name="maxBackups">The maximum number of backups to keep per file.</param>
+        public LocalLocationService(string cacheDirectory, Location location, IEnumerable<string> fileExtensions, ILogger<LocalLocationService> logger, int maxBackups)
         {
             _cacheDirectory = cacheDirectory;
             _location = location;
             _fileExtensions = fileExtensions;
             _logger = logger;
+            _maxBackups = maxBackups;
         }
 
         /// <inheritdoc />
@@ -44,6 +47,7 @@ namespace LiveSync
                     {
                         if (!File.Exists(destinationFilePath) || !await FilesAreEqualAsync(sourceFilePath, destinationFilePath))
                         {
+                            BackupFile(destinationFilePath);
                             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
                             File.Copy(sourceFilePath, destinationFilePath, true);
                             _logger.LogInformation("Copied file from {Source} to {Destination}", sourceFilePath, destinationFilePath);
@@ -59,7 +63,7 @@ namespace LiveSync
                     return;
                 }
 
-                _logger.LogError(ex, "An error occurred while pushing the latest files.");
+                _logger.LogError(ex, "An error occurred while pulling the latest files.");
             }
             catch (Exception ex)
             {
@@ -84,6 +88,7 @@ namespace LiveSync
                     {
                         if (!File.Exists(destinationFilePath) || !await FilesAreEqualAsync(sourceFilePath, destinationFilePath))
                         {
+                            BackupFile(destinationFilePath);
                             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
                             File.Copy(sourceFilePath, destinationFilePath, true);
                             _logger.LogInformation("Copied file from {Source} to {Destination}", sourceFilePath, destinationFilePath);
@@ -104,6 +109,32 @@ namespace LiveSync
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred while pushing the latest files.");
+            }
+        }
+
+        /// <summary>
+        /// Creates a backup of the specified file.
+        /// </summary>
+        /// <param name="filePath">The path of the file to back up.</param>
+        private void BackupFile(string filePath)
+        {
+            if (File.Exists(filePath))
+            {
+                var backupFilePath = $"{filePath}.{DateTime.UtcNow:yyyyMMddHHmmss}.bak";
+                File.Copy(filePath, backupFilePath);
+                _logger.LogInformation("Created backup of file {FilePath} at {BackupFilePath}", filePath, backupFilePath);
+
+                // Delete old backups if they exceed the maximum number of backups
+                var backupFiles = Directory.GetFiles(Path.GetDirectoryName(filePath), $"{Path.GetFileName(filePath)}.*.bak")
+                    .OrderByDescending(f => f)
+                    .Skip(_maxBackups)
+                    .ToList();
+
+                foreach (var backup in backupFiles)
+                {
+                    File.Delete(backup);
+                    _logger.LogInformation("Deleted old backup file {BackupFilePath}", backup);
+                }
             }
         }
 

@@ -42,7 +42,11 @@ namespace LiveSync
 
             foreach (var location in locationList)
             {
-                var locationService = _locationServiceFactory.Create(cacheSubDirectory, location, syncSetting.FileExtensions);
+                var locationService = _locationServiceFactory.Create(
+                    cacheSubDirectory,
+                    location,
+                    syncSetting.FileExtensions,
+                    _syncConfiguration.MaxBackups);
 
                 // Pull the latest files from the location to the cache subdirectory
                 await locationService.PullLatestAsync(token);
@@ -50,7 +54,11 @@ namespace LiveSync
 
             foreach (var location in locationList)
             {
-                var locationService = _locationServiceFactory.Create(cacheSubDirectory, location, syncSetting.FileExtensions);
+                var locationService = _locationServiceFactory.Create(
+                    cacheSubDirectory,
+                    location,
+                    syncSetting.FileExtensions,
+                    _syncConfiguration.MaxBackups);
 
                 // Push the latest files from the cache subdirectory to the location
                 await locationService.PushLatestAsync(token);

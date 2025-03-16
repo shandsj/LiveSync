@@ -17,26 +17,29 @@ namespace LiveSync
         }
 
         /// <inheritdoc />
-        public ILocationService Create(string cacheDirectory, Location location, IEnumerable<string> fileExtensions)
+        public ILocationService Create(
+            string cacheDirectory,
+            Location location,
+            IEnumerable<string> fileExtensions,
+            int maxBackups)
         {
-            switch (location.Type)
+            return location.Type switch
             {
-                case LocationType.Local:
-                case LocationType.FileShare:
-                    return new LocalLocationService(
-                        cacheDirectory,
-                        location,
-                        fileExtensions,
-                        _loggerFactory.CreateLogger<LocalLocationService>());
-                case LocationType.Ftp:
-                    return new FtpLocationService(
-                        cacheDirectory,
-                        location,
-                        fileExtensions,
-                        _loggerFactory.CreateLogger<FtpLocationService>());
-                default:
-                    throw new ArgumentException($"Unsupported location type: {location.Type}");
-            }
+                LocationType.Local 
+                or LocationType.FileShare => new LocalLocationService(
+                    cacheDirectory,
+                    location,
+                    fileExtensions,
+                    _loggerFactory.CreateLogger<LocalLocationService>(),
+                    maxBackups),
+                LocationType.Ftp => new FtpLocationService(
+                    cacheDirectory,
+                    location,
+                    fileExtensions,
+                    _loggerFactory.CreateLogger<FtpLocationService>(),
+                    maxBackups),
+                _ => throw new ArgumentException($"Unsupported location type: {location.Type}"),
+            };
         }
     }
 }

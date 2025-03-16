@@ -11,7 +11,12 @@ namespace LiveSync
         /// <param name="cacheDirectory">The cache directory path.</param>
         /// <param name="location">The location to synchronize.</param>
         /// <param name="fileExtensions">The file extensions to filter.</param>
+        /// <param name="maxBackups">The maximum number of backups to keep per file.</param>
         /// <returns>An instance of <see cref="ILocationService"/>.</returns>
-        ILocationService Create(string cacheDirectory, Location location, IEnumerable<string> fileExtensions);
+        ILocationService Create(
+            string cacheDirectory,
+            Location location,
+            IEnumerable<string> fileExtensions,
+            int maxBackups);
     }
 }
