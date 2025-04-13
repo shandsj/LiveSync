@@ -71,12 +71,19 @@ namespace LiveSync
                         .Select(item => item.RawModified)
                         .FirstOrDefault();
                         
-                    var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTimeUtc(destinationFilePath) : DateTime.MinValue;
+                    var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTimeUtc(destinationFilePath) : DateTimeOffset.MinValue;
 
                     if (sourceFileTimestamp > destinationFileTimestamp)
                     {
                         if (!File.Exists(destinationFilePath) || !await FilesAreEqualAsync(sourceFilePath, destinationFilePath, token))
                         {
+                            _logger.LogInformation(
+                                "Source file {sourceFilePath} timestamp  {sourceFileTimestamp} and destination file {destinationFilePath} timestamp {destinationFileTimestamp} differ",
+                                sourceFilePath,
+                                sourceFileTimestamp,
+                                destinationFilePath,
+                                destinationFileTimestamp);
+
                             BackupFile(destinationFilePath);
                             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
                             await _ftpClient.DownloadFile(destinationFilePath, sourceFilePath, FtpLocalExists.Overwrite, token: token);
@@ -125,10 +132,20 @@ namespace LiveSync
                     {
                         if (!await FtpFileExistsAsync(destinationFilePath, token) || !await FilesAreEqualAsync(destinationFilePath, sourceFilePath, token))
                         {
+                            _logger.LogInformation(
+                                "Source file {sourceFilePath} timestamp  {sourceFileTimestamp} and destination file {destinationFilePath} timestamp {destinationFileTimestamp} differ",
+                                sourceFilePath,
+                                sourceFileTimestamp,
+                                destinationFilePath,
+                                destinationFileTimestamp);
+
                             //BackupFile(destinationFilePath);
                             await _ftpClient.UploadFile(sourceFilePath, destinationFilePath, FtpRemoteExists.Overwrite, token: token);
                             await _ftpClient.SetModifiedTime(destinationFilePath, sourceFileTimestamp, token);
-                            _logger.LogInformation("Uploaded file from {Source} to {Destination}", sourceFilePath, destinationFilePath);
+                            _logger.LogInformation(
+                                "Uploaded file from {Source} to {Destination}",
+                                sourceFilePath,
+                                destinationFilePath);
                         }
                     }
                 }
@@ -155,7 +172,7 @@ namespace LiveSync
         {
             if (File.Exists(filePath))
             {
-                var backupFilePath = $"{filePath}.{DateTime.UtcNow:yyyyMMddHHmmss}.bak";
+                var backupFilePath = $"{filePath}.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.bak";
                 File.Copy(filePath, backupFilePath);
                 _logger.LogInformation("Created backup of file {FilePath} at {BackupFilePath}", filePath, backupFilePath);
 

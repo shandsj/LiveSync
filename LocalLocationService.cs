@@ -42,11 +42,21 @@ namespace LiveSync
                 {
                     var sourceFilePath = Path.Combine(_location.Path, file);
                     var destinationFilePath = Path.Combine(_cacheDirectory, file);
+                    
+                    var sourceFileTimestamp = File.GetLastWriteTimeUtc(sourceFilePath);
+                    var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTimeUtc(destinationFilePath) : DateTime.MinValue;
 
-                    if (!File.Exists(destinationFilePath) || File.GetLastWriteTimeUtc(sourceFilePath) > File.GetLastWriteTimeUtc(destinationFilePath))
+                    if (!File.Exists(destinationFilePath) || sourceFileTimestamp > destinationFileTimestamp)
                     {
                         if (!File.Exists(destinationFilePath) || !await FilesAreEqualAsync(sourceFilePath, destinationFilePath))
                         {
+                            _logger.LogInformation(
+                                "Source file {sourceFilePath} timestamp  {sourceFileTimestamp} and destination file {destinationFilePath} timestamp {destinationFileTimestamp} differ",
+                                sourceFilePath,
+                                sourceFileTimestamp,
+                                destinationFilePath,
+                                destinationFileTimestamp);
+
                             BackupFile(destinationFilePath);
                             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
                             File.Copy(sourceFilePath, destinationFilePath, true);
@@ -84,10 +94,20 @@ namespace LiveSync
                     var sourceFilePath = Path.Combine(_cacheDirectory, file);
                     var destinationFilePath = Path.Combine(_location.Path, file);
 
-                    if (!File.Exists(destinationFilePath) || File.GetLastWriteTimeUtc(sourceFilePath) > File.GetLastWriteTimeUtc(destinationFilePath))
+                    var sourceFileTimestamp = File.GetLastWriteTimeUtc(sourceFilePath);
+                    var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTimeUtc(destinationFilePath) : DateTime.MinValue;
+
+                    if (!File.Exists(destinationFilePath) || sourceFileTimestamp > destinationFileTimestamp)
                     {
                         if (!File.Exists(destinationFilePath) || !await FilesAreEqualAsync(sourceFilePath, destinationFilePath))
                         {
+                            _logger.LogInformation(
+                                "Source file {sourceFilePath} timestamp  {sourceFileTimestamp} and destination file {destinationFilePath} timestamp {destinationFileTimestamp} differ",
+                                sourceFilePath,
+                                sourceFileTimestamp,
+                                destinationFilePath,
+                                destinationFileTimestamp);
+
                             BackupFile(destinationFilePath);
                             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
                             File.Copy(sourceFilePath, destinationFilePath, true);
@@ -120,7 +140,7 @@ namespace LiveSync
         {
             if (File.Exists(filePath))
             {
-                var backupFilePath = $"{filePath}.{DateTime.UtcNow:yyyyMMddHHmmss}.bak";
+                var backupFilePath = $"{filePath}.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.bak";
                 File.Copy(filePath, backupFilePath);
                 _logger.LogInformation("Created backup of file {FilePath} at {BackupFilePath}", filePath, backupFilePath);
 
@@ -148,8 +168,8 @@ namespace LiveSync
             try
             {
                 return Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories)
-                                .Where(file => _fileExtensions.Contains(Path.GetExtension(file)))
-                                .Select(file => Path.GetRelativePath(directory, file));
+                    .Where(file => _fileExtensions.Contains(Path.GetExtension(file)))
+                    .Select(file => Path.GetRelativePath(directory, file));
             }
             catch (Exception)
             {
