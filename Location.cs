@@ -28,5 +28,10 @@ namespace LiveSync
         public string? FtpHost { get; set; }
         public int FtpPort { get; set; }
         public int FtpHostTimezone {get;set;}
+
+        /// <summary>
+        /// Gets or sets the mappings for renaming file extensions during synchronization for this location.
+        /// </summary>
+        public IDictionary<string, string> RenameMappings { get; set; } = new Dictionary<string, string>();
     }
 }

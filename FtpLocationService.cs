@@ -66,6 +66,15 @@ namespace LiveSync
                     var sourceFilePath = $"{_location.Path}/{file}";
                     var destinationFilePath = Path.Combine(_cacheDirectory, file);
 
+                    foreach (var mapping in _location.RenameMappings)
+                    {
+                        if (sourceFilePath.EndsWith(mapping.Value))
+                        {
+                            destinationFilePath = Path.ChangeExtension(destinationFilePath, mapping.Key);
+                            break;
+                        }
+                    }
+
                     var sourceFileTimestamp = (await _ftpClient.GetListing(_location.Path, FtpListOption.Modify, token))
                         .Where(item => item.Type == FtpObjectType.File && item.Name == file)
                         .Select(item => item.RawModified)
@@ -121,6 +130,15 @@ namespace LiveSync
                 {
                     var sourceFilePath = Path.Combine(_cacheDirectory, file);
                     var destinationFilePath = $"{_location.Path}/{file}";
+
+                    foreach (var mapping in _location.RenameMappings)
+                    {
+                        if (destinationFilePath.EndsWith(mapping.Key))
+                        {
+                            destinationFilePath = Path.ChangeExtension(destinationFilePath, mapping.Value);
+                            break;
+                        }
+                    }
 
                     var sourceFileTimestamp = File.GetLastWriteTimeUtc(sourceFilePath);
                     var destinationFileTimestamp = (await _ftpClient.GetListing(_location.Path, FtpListOption.Modify, token))

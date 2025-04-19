@@ -42,6 +42,15 @@ namespace LiveSync
                 {
                     var sourceFilePath = Path.Combine(_location.Path, file);
                     var destinationFilePath = Path.Combine(_cacheDirectory, file);
+
+                    foreach (var mapping in _location.RenameMappings)
+                    {
+                        if (sourceFilePath.EndsWith(mapping.Value))
+                        {
+                            destinationFilePath = Path.ChangeExtension(destinationFilePath, mapping.Key);
+                            break;
+                        }
+                    }
                     
                     var sourceFileTimestamp = File.GetLastWriteTimeUtc(sourceFilePath);
                     var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTimeUtc(destinationFilePath) : DateTime.MinValue;
@@ -93,6 +102,15 @@ namespace LiveSync
                 {
                     var sourceFilePath = Path.Combine(_cacheDirectory, file);
                     var destinationFilePath = Path.Combine(_location.Path, file);
+
+                    foreach (var mapping in _location.RenameMappings)
+                    {
+                        if (destinationFilePath.EndsWith(mapping.Key))
+                        {
+                            destinationFilePath = Path.ChangeExtension(destinationFilePath, mapping.Value);
+                            break;
+                        }
+                    }
 
                     var sourceFileTimestamp = File.GetLastWriteTimeUtc(sourceFilePath);
                     var destinationFileTimestamp = File.Exists(destinationFilePath) ? File.GetLastWriteTimeUtc(destinationFilePath) : DateTime.MinValue;
